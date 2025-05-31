@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,12 +8,18 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, Search, Ticket, Plus, TrendingUp, Menu, X } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
+import { VerificationLevel } from "@worldcoin/minikit-js"
+import { MiniKit } from "@worldcoin/minikit-js"
 
 export default function HomePage() {
   const { events, searchEvents } = useTicketStore()
   const [searchTerm, setSearchTerm] = useState("")
   const [filteredEvents, setFilteredEvents] = useState(events)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
+  const [showVerification, setShowVerification] = useState(true);
+  const [verificationState, setVerificationState] = useState<'pending' | 'success' | 'failed' | undefined>(undefined);
+  const [userData, setUserData] = useState<any>(null)
 
   useEffect(() => {
     if (searchTerm) {
@@ -22,6 +28,58 @@ export default function HomePage() {
       setFilteredEvents(events)
     }
   }, [searchTerm, events, searchEvents])
+
+  const handleVerification = useCallback(async () => {
+    setVerificationState('pending');
+    
+    try {
+      const result = await MiniKit.commandsAsync.verify({
+        action: 'verification',
+        verification_level: VerificationLevel.Device,
+      });
+
+      // Verify the proof
+      const response = await fetch('/api/verify-proof', {
+        method: 'POST',
+        body: JSON.stringify({
+          payload: result.finalPayload,
+          action: 'verification',
+        }),
+      });
+
+      const data = await response.json();
+      if (data.verifyRes.success) {
+        setVerificationState('success');
+        setIsVerified(true);
+        setTimeout(() => {
+          setShowVerification(false);
+        }, 1500);
+      } else {
+        setVerificationState('failed');
+        setTimeout(() => {
+          setVerificationState(undefined);
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Verification failed:', error);
+      setVerificationState('failed');
+      setTimeout(() => {
+        setVerificationState(undefined);
+      }, 2000);
+    }
+  }, []);
+
+  // Automatically open verification dialog after loading
+  useEffect(() => {
+    // Small delay to let the page load
+    const timer = setTimeout(() => {
+      if (!isVerified && showVerification) {
+        handleVerification();
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isVerified, showVerification, handleVerification]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -48,8 +106,16 @@ export default function HomePage() {
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center space-x-2">
               <Ticket className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
-              <span className="text-lg sm:text-2xl font-bold text-gray-900">TicketHub</span>
+              <span className="text-lg sm:text-2xl font-bold text-gray-900">Tickets</span>
             </div>
+
+            {/* User info */}
+            {userData && (
+              <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
+                <span>Welcome, {userData.username || userData.address?.slice(0, 8) || 'User'}</span>
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              </div>
+            )}
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-8">
@@ -82,6 +148,11 @@ export default function HomePage() {
           {/* Mobile Navigation Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden border-t bg-white py-4 space-y-3">
+              {userData && (
+                <div className="px-4 py-2 text-sm text-gray-600 border-b">
+                  Welcome, {userData.username || userData.address?.slice(0, 8) || 'User'}
+                </div>
+              )}
               <Link
                 href="/"
                 className="block px-4 py-2 text-gray-900 font-medium"
@@ -123,7 +194,7 @@ export default function HomePage() {
             Discover Amazing Events
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-6 sm:mb-8 px-4">
-            Find, buy, and sell tickets for concerts, sports, theater, and more
+            Find, buy, and sell tickets for concerts, sports, theater, and much more
           </p>
 
           {/* Mobile-Optimized Search Bar */}
@@ -205,25 +276,20 @@ export default function HomePage() {
                       <span className="truncate">{event.venue}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-3 sm:space-y-0">
-                    <div>
-                      <span className="text-xl sm:text-2xl font-bold text-purple-600">${event.price}</span>
-                      <span className="text-xs sm:text-sm text-gray-500 ml-1">per ticket</span>
+                  <div className="flex items-center justify-between">
+                    <div className="text-lg sm:text-xl font-bold text-purple-600">
+                      ${event.price}
                     </div>
-                    <Link href={`/events/${event.id}`} className="w-full sm:w-auto">
-                      <Button className="w-full sm:w-auto text-sm">Buy Tickets</Button>
+                    <Link href={`/events/${event.id}`}>
+                      <Button size="sm" className="bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm">
+                        Buy
+                      </Button>
                     </Link>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-
-          {filteredEvents.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500 text-base sm:text-lg">No events found matching your search.</p>
-            </div>
-          )}
         </div>
       </section>
     </div>
