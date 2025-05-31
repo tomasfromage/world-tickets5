@@ -139,7 +139,7 @@ export default function EventDetailPage() {
 
     try {
       const result = await MiniKit.commandsAsync.verify({
-        action: 'verify_payment',
+        action: 'verification',
         verification_level: VerificationLevel.Device,
       })
 
@@ -149,7 +149,7 @@ export default function EventDetailPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           payload: result.finalPayload,
-          action: 'verify_payment',
+          action: 'verification',
         }),
       })
 
