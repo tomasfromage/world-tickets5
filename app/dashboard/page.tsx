@@ -74,7 +74,7 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex items-center space-x-2">
               <Ticket className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
-              <span className="text-lg sm:text-2xl font-bold text-gray-900">TicketHub</span>
+              <span className="text-lg sm:text-2xl font-bold text-gray-900">Tickets</span>
             </div>
 
             {/* Desktop Navigation */}
