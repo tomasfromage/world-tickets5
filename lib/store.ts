@@ -2,6 +2,7 @@
 
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { supabase, type SupabaseEvent, type SupabaseEventInsert } from "./supabase"
 
 interface Event {
   id: string
@@ -16,6 +17,7 @@ interface Event {
   availableTickets: number
   createdAt: string
   createdBy?: string
+  imageUrl?: string
 }
 
 interface Ticket {
@@ -40,79 +42,70 @@ interface TicketStore {
   events: Event[]
   userTickets: Ticket[]
   resaleTickets: ResaleTicket[]
-  addEvent: (event: Event) => void
+  isLoading: boolean
+  error: string | null
+  loadEvents: () => Promise<void>
+  addEvent: (event: Omit<Event, 'id' | 'createdAt' | 'availableTickets'>) => Promise<boolean>
   purchaseTickets: (eventId: string, quantity: number) => boolean
   addResaleTicket: (ticket: ResaleTicket) => void
   searchEvents: (term: string) => Event[]
 }
 
-const initialEvents: Event[] = [
-  {
-    id: "1",
-    title: "Summer Music Festival 2024",
-    description: "Join us for an unforgettable night of music featuring top artists from around the world.",
-    category: "Music",
-    date: "2024-07-15",
-    time: "18:00",
-    venue: "Central Park, New York",
-    price: 89.99,
-    totalTickets: 5000,
-    availableTickets: 3247,
-    createdAt: "2024-01-15T10:00:00Z",
-  },
-  {
-    id: "2",
-    title: "Tech Conference 2024",
-    description: "Discover the latest innovations in technology with industry leaders and networking opportunities.",
-    category: "Conference",
-    date: "2024-06-20",
-    time: "09:00",
-    venue: "Convention Center, San Francisco",
-    price: 299.99,
-    totalTickets: 1000,
-    availableTickets: 234,
-    createdAt: "2024-01-10T08:00:00Z",
-  },
-  {
-    id: "3",
-    title: "Broadway Musical: The Lion King",
-    description: "Experience the magic of Disney's The Lion King live on Broadway with stunning visuals and music.",
-    category: "Theater",
-    date: "2024-08-05",
-    time: "19:30",
-    venue: "Minskoff Theatre, New York",
-    price: 125.0,
-    totalTickets: 1600,
-    availableTickets: 892,
-    createdAt: "2024-01-20T14:00:00Z",
-  },
-  {
-    id: "4",
-    title: "NBA Finals Game 7",
-    description: "Witness history in the making at the most anticipated basketball game of the year.",
-    category: "Sports",
-    date: "2024-06-18",
-    time: "20:00",
-    venue: "Madison Square Garden, New York",
-    price: 450.0,
-    totalTickets: 20000,
-    availableTickets: 5678,
-    createdAt: "2024-01-05T12:00:00Z",
-  },
-  {
-    id: "5",
-    title: "Comedy Night with Dave Chappelle",
-    description: "An evening of laughter with one of the greatest comedians of our time.",
-    category: "Comedy",
-    date: "2024-07-30",
-    time: "21:00",
-    venue: "Comedy Club, Los Angeles",
-    price: 75.0,
-    totalTickets: 500,
-    availableTickets: 123,
-    createdAt: "2024-01-25T16:00:00Z",
-  },
-]
+// Helper function to convert Supabase event to local Event format
+const convertSupabaseEvent = (supabaseEvent: SupabaseEvent): Event => {
+  // Zpětné mapování kategorií z databáze do UI
+  const categoryReverseMapping: { [key: string]: string } = {
+    'Concert': 'Music',
+    'Sport': 'Sport',
+    'Conference': 'Conference',
+    'Hackathon': 'Hackathon',
+    'Other': 'Other'
+  }
+  
+  return {
+    id: supabaseEvent.id.toString(),
+    title: supabaseEvent.name,
+    description: supabaseEvent.description,
+    category: categoryReverseMapping[supabaseEvent.event_type] || 'Other',
+    date: new Date(supabaseEvent.date).toISOString().split('T')[0],
+    time: new Date(supabaseEvent.date).toTimeString().split(' ')[0].slice(0, 5),
+    venue: supabaseEvent.location,
+    price: Number(supabaseEvent.ticket_price),
+    totalTickets: supabaseEvent.total_tickets,
+    availableTickets: supabaseEvent.total_tickets - supabaseEvent.sold_tickets,
+    createdAt: supabaseEvent.created_at,
+    imageUrl: supabaseEvent.image_url || undefined
+  }
+}
+
+// Helper function to convert local Event to Supabase format
+const convertToSupabaseEvent = (event: Omit<Event, 'id' | 'createdAt' | 'availableTickets'>): SupabaseEventInsert => {
+  const eventDate = new Date(`${event.date}T${event.time}:00`)
+  
+  // Mapování kategorií mezi UI a databází
+  const categoryMapping: { [key: string]: string } = {
+    'Music': 'Concert',
+    'Sport': 'Sport',
+    'Theater': 'Other',
+    'Comedy': 'Other',
+    'Conference': 'Conference',
+    'Hackathon': 'Hackathon',
+    'Other': 'Other'
+  }
+  
+  return {
+    name: event.title,
+    description: event.description,
+    date: eventDate.toISOString(),
+    location: event.venue,
+    ticket_price: event.price,
+    total_tickets: event.totalTickets,
+    sold_tickets: 0,
+    vendor: "Platform User", // TODO: Později propojit s uživatelským systémem
+    event_type: categoryMapping[event.category] as any,
+    image_url: event.imageUrl || null
+  }
+}
 
 const initialResaleTickets: ResaleTicket[] = [
   {
@@ -144,14 +137,77 @@ const initialResaleTickets: ResaleTicket[] = [
 export const useTicketStore = create<TicketStore>()(
   persist(
     (set, get) => ({
-      events: initialEvents,
+      events: [],
       userTickets: [],
       resaleTickets: initialResaleTickets,
+      isLoading: false,
+      error: null,
 
-      addEvent: (event) =>
-        set((state) => ({
-          events: [...state.events, { ...event, createdBy: "user" }],
-        })),
+      loadEvents: async () => {
+        set({ isLoading: true, error: null })
+        
+        try {
+          const { data, error } = await supabase
+            .from('events')
+            .select('*')
+            .order('date', { ascending: true })
+
+          if (error) {
+            console.error('Supabase error:', error)
+            set({ error: error.message, isLoading: false })
+            return
+          }
+
+          const events = data?.map(convertSupabaseEvent) || []
+          console.log('Loaded events from Supabase:', events.length)
+          set({ events, isLoading: false })
+        } catch (error) {
+          console.error('Error loading events:', error)
+          set({ error: 'Failed to load events', isLoading: false })
+        }
+      },
+
+      addEvent: async (event) => {
+        set({ isLoading: true, error: null })
+        
+        try {
+          const supabaseEvent = convertToSupabaseEvent(event)
+          console.log('Inserting event:', supabaseEvent)
+          console.log('Original event data:', event)
+          
+          const { data, error } = await supabase
+            .from('events')
+            .insert(supabaseEvent)
+            .select()
+            .single()
+
+          if (error) {
+            console.error('Supabase insert error:', error)
+            console.error('Error details:', JSON.stringify(error, null, 2))
+            set({ error: `Chyba při vytváření eventu: ${error.message}`, isLoading: false })
+            return false
+          }
+
+          if (data) {
+            const newEvent = convertSupabaseEvent(data)
+            set((state) => ({
+              events: [...state.events, newEvent],
+              isLoading: false
+            }))
+            console.log('Event created successfully:', newEvent)
+            return true
+          }
+
+          console.error('No data returned from Supabase insert')
+          set({ error: 'Nepodařilo se vytvořit event - žádná data', isLoading: false })
+          return false
+        } catch (error) {
+          console.error('Error creating event:', error)
+          console.error('Error stack:', error instanceof Error ? error.stack : 'Unknown error')
+          set({ error: `Neočekávaná chyba: ${error instanceof Error ? error.message : 'Neznámá chyba'}`, isLoading: false })
+          return false
+        }
+      },
 
       purchaseTickets: (eventId, quantity) => {
         const state = get()
@@ -177,6 +233,8 @@ export const useTicketStore = create<TicketStore>()(
           userTickets: [...state.userTickets, ...newTickets],
         }))
 
+        // TODO: Později přidat update do Supabase pro sold_tickets
+
         return true
       },
 
@@ -198,6 +256,11 @@ export const useTicketStore = create<TicketStore>()(
     }),
     {
       name: "ticket-store",
+      partialize: (state) => ({
+        // Pouze ukládáme userTickets a resaleTickets, eventy načítáme ze Supabase
+        userTickets: state.userTickets,
+        resaleTickets: state.resaleTickets,
+      })
     },
   ),
 )

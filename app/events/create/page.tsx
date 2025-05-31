@@ -29,24 +29,36 @@ import {
   CheckCircle,
   AlertCircle,
   Clock,
+  Loader2,
 } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
 
 const categoryIcons = {
   Music: Music,
-  Sports: Trophy,
+  Sport: Trophy,
   Theater: Theater,
   Comedy: Mic,
   Conference: Briefcase,
+  Hackathon: Users,
   Other: Users,
+}
+
+const categoryTranslations = {
+  Music: 'Music',
+  Sport: 'Sport', 
+  Theater: 'Theater',
+  Comedy: 'Comedy',
+  Conference: 'Conference',
+  Hackathon: 'Hackathon',
+  Other: 'Other'
 }
 
 export default function CreateEventPage() {
   const router = useRouter()
-  const { addEvent } = useTicketStore()
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const { addEvent, isLoading } = useTicketStore()
   const [showPreview, setShowPreview] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitError, setSubmitError] = useState<string>("")
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -103,8 +115,8 @@ export default function CreateEventPage() {
       const price = Number.parseFloat(formData.price)
       if (isNaN(price) || price < 0) {
         newErrors.price = "Price must be a valid positive number"
-      } else if (price > 10000) {
-        newErrors.price = "Price cannot exceed $10,000"
+      } else if (price > 50000) {
+        newErrors.price = "Price cannot exceed 50,000"
       }
     }
 
@@ -119,8 +131,21 @@ export default function CreateEventPage() {
       }
     }
 
+    if (formData.imageUrl && !isValidUrl(formData.imageUrl)) {
+      newErrors.imageUrl = "Please enter a valid URL address"
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
+  }
+
+  const isValidUrl = (url: string) => {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -130,23 +155,29 @@ export default function CreateEventPage() {
       return
     }
 
-    setIsSubmitting(true)
+    setSubmitError("")
 
-    // Simulate API call delay
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-
-    const newEvent = {
-      id: Date.now().toString(),
-      ...formData,
+    const eventData = {
+      title: formData.title.trim(),
+      description: formData.description.trim(),
+      category: formData.category,
+      date: formData.date,
+      time: formData.time,
+      venue: formData.venue.trim(),
       price: Number.parseFloat(formData.price),
       totalTickets: Number.parseInt(formData.totalTickets),
-      availableTickets: Number.parseInt(formData.totalTickets),
-      createdAt: new Date().toISOString(),
+      imageUrl: formData.imageUrl.trim() || undefined,
     }
 
-    addEvent(newEvent)
-    setIsSubmitting(false)
-    router.push(`/events/${newEvent.id}`)
+    console.log('Submitting event:', eventData)
+
+    const success = await addEvent(eventData)
+
+    if (success) {
+      router.push('/')
+    } else {
+      setSubmitError("Failed to create event. Please try again.")
+    }
   }
 
   const handleChange = (field: string, value: string) => {
@@ -154,6 +185,9 @@ export default function CreateEventPage() {
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }))
+    }
+    if (submitError) {
+      setSubmitError("")
     }
   }
 
@@ -172,7 +206,6 @@ export default function CreateEventPage() {
     return new Date(`2000-01-01T${timeString}`).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
-      hour12: true,
     })
   }
 
@@ -191,12 +224,12 @@ export default function CreateEventPage() {
               <div className="flex items-center space-x-2 sm:space-x-4">
                 <Button variant="ghost" size="sm" onClick={() => setShowPreview(false)}>
                   <ArrowLeft className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Back to Edit</span>
+                  <span className="hidden sm:inline">Back to editing</span>
                   <span className="sm:hidden">Back</span>
                 </Button>
                 <div className="flex items-center space-x-2">
                   <Ticket className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
-                  <span className="text-lg sm:text-2xl font-bold text-gray-900">TicketHub</span>
+                  <span className="text-lg sm:text-2xl font-bold text-gray-900">Tickets</span>
                 </div>
               </div>
             </div>
@@ -216,59 +249,65 @@ export default function CreateEventPage() {
 
           <Card className="overflow-hidden">
             <div className="aspect-video bg-gradient-to-r from-purple-400 to-blue-500 relative">
-              <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center p-4">
-                <h2 className="text-white text-xl sm:text-2xl lg:text-3xl font-bold text-center">
-                  {formData.title || "Your Event Title"}
-                </h2>
-              </div>
+              {formData.imageUrl ? (
+                <img 
+                  src={formData.imageUrl} 
+                  alt={formData.title}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center p-6">
+                  <h1 className="text-white text-2xl sm:text-4xl font-bold text-center">{formData.title || "Event Preview"}</h1>
+                </div>
+              )}
             </div>
             <CardHeader>
               <div className="flex flex-col sm:flex-row justify-between items-start space-y-2 sm:space-y-0">
-                <div className="min-w-0 flex-1">
-                  <CardTitle className="text-xl sm:text-2xl">{formData.title || "Event Title"}</CardTitle>
-                  <CardDescription className="mt-2 text-sm sm:text-base">
-                    {formData.description || "Event description will appear here"}
-                  </CardDescription>
+                <div>
+                  <CardTitle className="text-2xl sm:text-3xl">{formData.title || "Event title"}</CardTitle>
+                  <CardDescription className="mt-2 text-lg">{formData.description || "Event description"}</CardDescription>
                 </div>
-                <Badge variant="secondary" className="text-sm shrink-0">
-                  {formData.category || "Category"}
+                <Badge variant="secondary" className="text-sm">
+                  {formData.category ? categoryTranslations[formData.category as keyof typeof categoryTranslations] : "Category"}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
-                    <Calendar className="h-5 w-5 text-purple-600 shrink-0" />
+                    <Calendar className="h-5 w-5 text-gray-500" />
                     <div>
-                      <p className="font-medium">Date & Time</p>
-                      <p className="text-sm sm:text-base text-gray-600">{formatDate(formData.date) || "Event date"}</p>
-                      <p className="text-sm sm:text-base text-gray-600">{formatTime(formData.time) || "Event time"}</p>
+                      <div className="font-medium">Date and time</div>
+                      <div className="text-gray-600">
+                        {formData.date ? formatDate(formData.date) : "Date not selected"}
+                        {formData.time && ` at ${formatTime(formData.time)}`}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <MapPin className="h-5 w-5 text-purple-600 shrink-0" />
-                    <div className="min-w-0">
-                      <p className="font-medium">Venue</p>
-                      <p className="text-sm sm:text-base text-gray-600 break-words">
-                        {formData.venue || "Event venue"}
-                      </p>
+                    <MapPin className="h-5 w-5 text-gray-500" />
+                    <div>
+                      <div className="font-medium">Venue</div>
+                      <div className="text-gray-600">{formData.venue || "Venue not specified"}</div>
                     </div>
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
-                    <DollarSign className="h-5 w-5 text-purple-600 shrink-0" />
+                    <DollarSign className="h-5 w-5 text-gray-500" />
                     <div>
-                      <p className="font-medium">Ticket Price</p>
-                      <p className="text-xl sm:text-2xl font-bold text-purple-600">${formData.price || "0.00"}</p>
+                      <div className="font-medium">Ticket price</div>
+                      <div className="text-2xl font-bold text-purple-600">
+                        {formData.price ? `$${Number(formData.price).toLocaleString('en-US')}` : "Price not specified"}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">
-                    <Ticket className="h-5 w-5 text-purple-600 shrink-0" />
+                    <Ticket className="h-5 w-5 text-gray-500" />
                     <div>
-                      <p className="font-medium">Available Tickets</p>
-                      <p className="text-sm sm:text-base text-gray-600">{formData.totalTickets || "0"} tickets</p>
+                      <div className="font-medium">Available tickets</div>
+                      <div className="text-gray-600">{formData.totalTickets || "0"} tickets</div>
                     </div>
                   </div>
                 </div>
@@ -280,8 +319,18 @@ export default function CreateEventPage() {
             <Button onClick={() => setShowPreview(false)} variant="outline" className="flex-1">
               Continue Editing
             </Button>
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 bg-purple-600 hover:bg-purple-700">
-              {isSubmitting ? "Creating Event..." : "Publish Event"}
+            <Button onClick={handleSubmit} disabled={isLoading} className="flex-1 bg-purple-600 hover:bg-purple-700">
+              {isLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Creating Event...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Publish Event
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -291,7 +340,7 @@ export default function CreateEventPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
-      {/* Mobile-Optimized Header */}
+      {/* Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
@@ -299,313 +348,340 @@ export default function CreateEventPage() {
               <Link href="/">
                 <Button variant="ghost" size="sm">
                   <ArrowLeft className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">Back to Events</span>
+                  <span className="hidden sm:inline">Back to main</span>
                   <span className="sm:hidden">Back</span>
                 </Button>
               </Link>
               <div className="flex items-center space-x-2">
                 <Ticket className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
-                <span className="text-lg sm:text-2xl font-bold text-gray-900">TicketHub</span>
+                <span className="text-lg sm:text-2xl font-bold text-gray-900">Tickets</span>
               </div>
+            </div>
+            <div className="flex items-center space-x-2 sm:space-x-4">
             </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-3xl mx-auto py-6 sm:py-12 px-4 sm:px-6 lg:px-8">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Create New Event</h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Fill in the details below to create your event and start selling tickets.
-          </p>
-        </div>
+      {/* Main Content */}
+      <div className="py-6 sm:py-8 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-6 sm:mb-8">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2 sm:mb-4">
+              Create New Event
+            </h1>
+            <p className="text-base sm:text-lg text-gray-600">
+              Fill in your event details and start selling tickets
+            </p>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg sm:text-xl flex items-center space-x-2">
-              <Calendar className="h-5 w-5" />
-              <span>Event Details</span>
-            </CardTitle>
-            <CardDescription className="text-sm sm:text-base">
-              Provide comprehensive information about your event to attract attendees.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
-              {/* Basic Information */}
-              <div className="space-y-4 sm:space-y-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Basic Information</h3>
+          <Card className="shadow-lg">
+            <form onSubmit={handleSubmit}>
+              <CardHeader>
+                <CardTitle className="text-xl sm:text-2xl">Event Information</CardTitle>
+                <CardDescription>
+                  All fields marked with * are required
+                </CardDescription>
+              </CardHeader>
 
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="text-sm sm:text-base">
-                    Event Name *
-                  </Label>
-                  <Input
-                    id="title"
-                    placeholder="Enter a compelling event title"
-                    value={formData.title}
-                    onChange={(e) => handleChange("title", e.target.value)}
-                    className={`text-sm sm:text-base ${errors.title ? "border-red-500" : ""}`}
-                  />
-                  {errors.title && (
-                    <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                      <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>{errors.title}</span>
-                    </p>
-                  )}
-                  <p className="text-xs sm:text-sm text-gray-500">
-                    Choose a clear, descriptive title that will attract attendees
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description" className="text-sm sm:text-base">
-                    Description *
-                  </Label>
-                  <Textarea
-                    id="description"
-                    placeholder="Describe your event in detail - what attendees can expect, special features, etc."
-                    value={formData.description}
-                    onChange={(e) => handleChange("description", e.target.value)}
-                    className={`min-h-[100px] sm:min-h-[120px] text-sm sm:text-base ${errors.description ? "border-red-500" : ""}`}
-                  />
-                  {errors.description && (
-                    <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                      <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>{errors.description}</span>
-                    </p>
-                  )}
-                  <p className="text-xs sm:text-sm text-gray-500">
-                    {formData.description.length}/500 characters - Include key details and highlights
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="category" className="text-sm sm:text-base">
-                    Category *
-                  </Label>
-                  <Select onValueChange={(value) => handleChange("category", value)}>
-                    <SelectTrigger className={`text-sm sm:text-base ${errors.category ? "border-red-500" : ""}`}>
-                      <SelectValue placeholder="Select event category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(categoryIcons).map(([category, Icon]) => (
-                        <SelectItem key={category} value={category}>
-                          <div className="flex items-center space-x-2">
-                            <Icon className="h-4 w-4" />
-                            <span>{category}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.category && (
-                    <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                      <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>{errors.category}</span>
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Date & Time */}
-              <div className="space-y-4 sm:space-y-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
-                  <Clock className="h-5 w-5" />
-                  <span>Date & Time</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="date" className="text-sm sm:text-base">
-                      Event Date *
-                    </Label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="date"
-                        type="date"
-                        min={getTomorrowDate()}
-                        value={formData.date}
-                        onChange={(e) => handleChange("date", e.target.value)}
-                        className={`pl-10 text-sm sm:text-base ${errors.date ? "border-red-500" : ""}`}
-                      />
-                    </div>
-                    {errors.date && (
-                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>{errors.date}</span>
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="time" className="text-sm sm:text-base">
-                      Start Time *
-                    </Label>
-                    <Input
-                      id="time"
-                      type="time"
-                      value={formData.time}
-                      onChange={(e) => handleChange("time", e.target.value)}
-                      className={`text-sm sm:text-base ${errors.time ? "border-red-500" : ""}`}
-                    />
-                    {errors.time && (
-                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>{errors.time}</span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Location */}
-              <div className="space-y-4 sm:space-y-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
-                  <MapPin className="h-5 w-5" />
-                  <span>Location</span>
-                </h3>
-
-                <div className="space-y-2">
-                  <Label htmlFor="venue" className="text-sm sm:text-base">
-                    Venue *
-                  </Label>
-                  <div className="relative">
-                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                    <Input
-                      id="venue"
-                      placeholder="Enter venue name and full address"
-                      value={formData.venue}
-                      onChange={(e) => handleChange("venue", e.target.value)}
-                      className={`pl-10 text-sm sm:text-base ${errors.venue ? "border-red-500" : ""}`}
-                    />
-                  </div>
-                  {errors.venue && (
-                    <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                      <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>{errors.venue}</span>
-                    </p>
-                  )}
-                  <p className="text-xs sm:text-sm text-gray-500">Include full address for easy navigation</p>
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Ticketing */}
-              <div className="space-y-4 sm:space-y-6">
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
-                  <Ticket className="h-5 w-5" />
-                  <span>Ticketing</span>
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="price" className="text-sm sm:text-base">
-                      Ticket Price (USD) *
-                    </Label>
-                    <div className="relative">
-                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="price"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        max="10000"
-                        placeholder="0.00"
-                        value={formData.price}
-                        onChange={(e) => handleChange("price", e.target.value)}
-                        className={`pl-10 text-sm sm:text-base ${errors.price ? "border-red-500" : ""}`}
-                      />
-                    </div>
-                    {errors.price && (
-                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>{errors.price}</span>
-                      </p>
-                    )}
-                    <p className="text-xs sm:text-sm text-gray-500">Set a competitive price for your event</p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="totalTickets" className="text-sm sm:text-base">
-                      Number of Tickets *
-                    </Label>
-                    <div className="relative">
-                      <Ticket className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                      <Input
-                        id="totalTickets"
-                        type="number"
-                        min="1"
-                        max="100000"
-                        placeholder="100"
-                        value={formData.totalTickets}
-                        onChange={(e) => handleChange("totalTickets", e.target.value)}
-                        className={`pl-10 text-sm sm:text-base ${errors.totalTickets ? "border-red-500" : ""}`}
-                      />
-                    </div>
-                    {errors.totalTickets && (
-                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
-                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>{errors.totalTickets}</span>
-                      </p>
-                    )}
-                    <p className="text-xs sm:text-sm text-gray-500">Total tickets available for sale</p>
-                  </div>
-                </div>
-
-                {formData.price && formData.totalTickets && (
-                  <Alert>
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription className="text-sm sm:text-base">
-                      <strong>Potential Revenue:</strong> $
-                      {(
-                        Number.parseFloat(formData.price || "0") * Number.parseInt(formData.totalTickets || "0")
-                      ).toLocaleString()}{" "}
-                      (if all tickets are sold)
+              <CardContent className="space-y-6 sm:space-y-8">
+                {/* Error Alert */}
+                {submitError && (
+                  <Alert className="border-red-200 bg-red-50">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-red-800">
+                      {submitError}
                     </AlertDescription>
                   </Alert>
                 )}
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex flex-col space-y-3 sm:space-y-0 sm:flex-row sm:space-x-4 pt-6">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowPreview(true)}
-                  disabled={!formData.title || !formData.description}
-                  className="flex-1 text-sm sm:text-base"
-                >
-                  <Eye className="h-4 w-4 mr-2" />
-                  Preview Event
-                </Button>
+                {/* Basic Info */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                    <Users className="h-5 w-5" />
+                    <span>Basic information</span>
+                  </h3>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="title" className="text-sm sm:text-base">
+                      Event Title *
+                    </Label>
+                    <Input
+                      id="title"
+                      placeholder="Enter your event title"
+                      value={formData.title}
+                      onChange={(e) => handleChange("title", e.target.value)}
+                      className={`text-sm sm:text-base ${errors.title ? "border-red-500" : ""}`}
+                    />
+                    {errors.title && (
+                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span>{errors.title}</span>
+                      </p>
+                    )}
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Choose a clear and catchy title that will attract attendees
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="description" className="text-sm sm:text-base">
+                      Description *
+                    </Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Describe your event in detail - what attendees can expect, special features, etc."
+                      value={formData.description}
+                      onChange={(e) => handleChange("description", e.target.value)}
+                      className={`min-h-[100px] sm:min-h-[120px] text-sm sm:text-base ${errors.description ? "border-red-500" : ""}`}
+                    />
+                    {errors.description && (
+                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span>{errors.description}</span>
+                      </p>
+                    )}
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      {formData.description.length}/500 characters - Include key details and highlights
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="category" className="text-sm sm:text-base">
+                      Category *
+                    </Label>
+                    <Select onValueChange={(value) => handleChange("category", value)}>
+                      <SelectTrigger className={`text-sm sm:text-base ${errors.category ? "border-red-500" : ""}`}>
+                        <SelectValue placeholder="Select event category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(categoryIcons).map(([category, Icon]) => (
+                          <SelectItem key={category} value={category}>
+                            <div className="flex items-center space-x-2">
+                              <Icon className="h-4 w-4" />
+                              <span>{categoryTranslations[category as keyof typeof categoryTranslations]}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.category && (
+                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span>{errors.category}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="imageUrl" className="text-sm sm:text-base">
+                      Image URL (optional)
+                    </Label>
+                    <Input
+                      id="imageUrl"
+                      type="url"
+                      placeholder="https://example.com/image.jpg"
+                      value={formData.imageUrl}
+                      onChange={(e) => handleChange("imageUrl", e.target.value)}
+                      className={`text-sm sm:text-base ${errors.imageUrl ? "border-red-500" : ""}`}
+                    />
+                    {errors.imageUrl && (
+                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span>{errors.imageUrl}</span>
+                      </p>
+                    )}
+                    <p className="text-xs sm:text-sm text-gray-500">
+                      Add an image that represents your event
+                    </p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Date & Time */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                    <Clock className="h-5 w-5" />
+                    <span>Date and Time</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="date" className="text-sm sm:text-base">
+                        Event Date *
+                      </Label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          id="date"
+                          type="date"
+                          min={getTomorrowDate()}
+                          value={formData.date}
+                          onChange={(e) => handleChange("date", e.target.value)}
+                          className={`pl-10 text-sm sm:text-base ${errors.date ? "border-red-500" : ""}`}
+                        />
+                      </div>
+                      {errors.date && (
+                        <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span>{errors.date}</span>
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="time" className="text-sm sm:text-base">
+                        Start Time *
+                      </Label>
+                      <Input
+                        id="time"
+                        type="time"
+                        value={formData.time}
+                        onChange={(e) => handleChange("time", e.target.value)}
+                        className={`text-sm sm:text-base ${errors.time ? "border-red-500" : ""}`}
+                      />
+                      {errors.time && (
+                        <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span>{errors.time}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Location */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                    <MapPin className="h-5 w-5" />
+                    <span>Venue</span>
+                  </h3>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="venue" className="text-sm sm:text-base">
+                      Venue *
+                    </Label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                      <Input
+                        id="venue"
+                        placeholder="Enter venue name and full address"
+                        value={formData.venue}
+                        onChange={(e) => handleChange("venue", e.target.value)}
+                        className={`pl-10 text-sm sm:text-base ${errors.venue ? "border-red-500" : ""}`}
+                      />
+                    </div>
+                    {errors.venue && (
+                      <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                        <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                        <span>{errors.venue}</span>
+                      </p>
+                    )}
+                    <p className="text-xs sm:text-sm text-gray-500">Provide full address for easy navigation</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Ticketing */}
+                <div className="space-y-4 sm:space-y-6">
+                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                    <Ticket className="h-5 w-5" />
+                    <span>Tickets</span>
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="space-y-2">
+                      <Label htmlFor="price" className="text-sm sm:text-base">
+                        Ticket Price ($) *
+                      </Label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          id="price"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="50000"
+                          placeholder="0.00"
+                          value={formData.price}
+                          onChange={(e) => handleChange("price", e.target.value)}
+                          className={`pl-10 text-sm sm:text-base ${errors.price ? "border-red-500" : ""}`}
+                        />
+                      </div>
+                      {errors.price && (
+                        <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span>{errors.price}</span>
+                        </p>
+                      )}
+                      <p className="text-xs sm:text-sm text-gray-500">Set a competitive price</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="totalTickets" className="text-sm sm:text-base">
+                        Number of Tickets *
+                      </Label>
+                      <div className="relative">
+                        <Ticket className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          id="totalTickets"
+                          type="number"
+                          min="1"
+                          max="100000"
+                          placeholder="100"
+                          value={formData.totalTickets}
+                          onChange={(e) => handleChange("totalTickets", e.target.value)}
+                          className={`pl-10 text-sm sm:text-base ${errors.totalTickets ? "border-red-500" : ""}`}
+                        />
+                      </div>
+                      {errors.totalTickets && (
+                        <p className="text-xs sm:text-sm text-red-600 flex items-center space-x-1">
+                          <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4" />
+                          <span>{errors.totalTickets}</span>
+                        </p>
+                      )}
+                      <p className="text-xs sm:text-sm text-gray-500">Total number of tickets for sale</p>
+                    </div>
+                  </div>
+
+                  {formData.price && formData.totalTickets && (
+                    <Alert>
+                      <CheckCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Total potential revenue:</strong>{" "}
+                        ${(Number(formData.price) * Number(formData.totalTickets)).toLocaleString("en-US")}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </CardContent>
+
+              <div className="px-6 py-4 bg-gray-50 border-t flex flex-col sm:flex-row gap-3 sm:gap-4">
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isLoading}
                   className="flex-1 bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
                 >
-                  {isSubmitting ? (
+                  {isLoading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Creating Event...
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Creating event...
                     </>
                   ) : (
                     <>
                       <CheckCircle className="h-4 w-4 mr-2" />
-                      Create Event
+                      Publish Event
                     </>
                   )}
                 </Button>
               </div>
             </form>
-          </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   )
