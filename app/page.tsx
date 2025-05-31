@@ -270,8 +270,8 @@ export default function HomePage() {
                 </div>
               ) : (
                 filteredEvents.map((event) => (
-                  <Link href={`/events/${event.id}`}>
                   <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
+                    <Link href={`/events/${event.id}`}>
                     <div className="aspect-video bg-gradient-to-r from-purple-400 to-blue-500 relative">
                       {event.imageUrl ? (
                         <img 
@@ -320,8 +320,8 @@ export default function HomePage() {
                         </Link>
                       </div>
                     </CardContent>
+                    </Link>
                   </Card>
-                  </Link>
                 ))
               )}
             </div>
