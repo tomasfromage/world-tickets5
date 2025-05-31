@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Calendar, MapPin, Ticket, Users, CreditCard, CheckCircle } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
-import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload } from '@worldcoin/minikit-js'
+import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload, VerificationLevel } from '@worldcoin/minikit-js'
 
 // Define Event type based on the store interface
 interface Event {
@@ -39,6 +39,8 @@ export default function EventDetailPage() {
   const [quantity, setQuantity] = useState(1)
   const [purchaseComplete, setPurchaseComplete] = useState(false)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(false)
+  const [isVerified, setIsVerified] = useState(false)
 
   useEffect(() => {
     const foundEvent = events.find((e) => e.id === params.id)
@@ -127,10 +129,62 @@ export default function EventDetailPage() {
     })
   }
 
+  const handleVerification = async () => {
+    if (!MiniKit.isInstalled()) {
+      alert('World App is not installed. World App is required for verification.')
+      return false
+    }
+
+    setIsVerifying(true)
+
+    try {
+      const result = await MiniKit.commandsAsync.verify({
+        action: 'verify_payment',
+        verification_level: VerificationLevel.Device,
+      })
+
+      // Verify the proof on backend
+      const response = await fetch('/api/verify-proof', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payload: result.finalPayload,
+          action: 'verify_payment',
+        }),
+      })
+
+      const data = await response.json()
+      
+      if (data.verifyRes.success) {
+        setIsVerified(true)
+        setIsVerifying(false)
+        return true
+      } else {
+        console.error('Verification failed:', data)
+        alert('Verification failed. Please try again.')
+        setIsVerifying(false)
+        return false
+      }
+    } catch (error) {
+      console.error('Error during verification:', error)
+      alert('An error occurred during verification.')
+      setIsVerifying(false)
+      return false
+    }
+  }
+
   const handleMiniKitPayment = async () => {
     if (!MiniKit.isInstalled()) {
       alert('World App is not installed. World App is required for payment.')
       return
+    }
+
+    // First verify if not already verified
+    if (!isVerified) {
+      const verificationSuccess = await handleVerification()
+      if (!verificationSuccess) {
+        return // Stop if verification failed
+      }
     }
 
     setIsProcessingPayment(true)
@@ -154,7 +208,7 @@ export default function EventDetailPage() {
 
       const payload: PayCommandInput = {
         reference: id,
-        to: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", // Test address - replace with actual address
+        to: "0x18D65F587BeCE576291FEced4feb6F2f8C47579e", 
         tokens: [
           {
             symbol: Tokens.USDCE,
@@ -326,19 +380,30 @@ export default function EventDetailPage() {
                   <Button
                     onClick={handleMiniKitPayment}
                     className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
-                    disabled={event.availableTickets === 0 || isProcessingPayment}
+                    disabled={event.availableTickets === 0 || isProcessingPayment || isVerifying}
                   >
                     {event.availableTickets === 0 
                       ? "Sold Out" 
-                      : isProcessingPayment 
-                        ? "Processing Payment..." 
-                        : "Pay with World App"
+                      : isVerifying
+                        ? "Verifying Identity..."
+                        : isProcessingPayment 
+                          ? "Processing Payment..." 
+                          : isVerified
+                            ? "Pay with World App"
+                            : "Verify & Pay with World App"
                     }
                   </Button>
 
                   {!MiniKit.isInstalled() && (
                     <p className="text-xs text-gray-500 text-center">
-                      World App is required for payment
+                      World App is required for verification and payment
+                    </p>
+                  )}
+
+                  {isVerified && !isProcessingPayment && (
+                    <p className="text-xs text-green-600 text-center flex items-center justify-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Identity verified - ready to pay
                     </p>
                   )}
                 </div>

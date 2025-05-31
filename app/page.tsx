@@ -77,16 +77,16 @@ export default function HomePage() {
   }, []);
 
   // Automatically open verification dialog after loading
-  useEffect(() => {
-    // Small delay to let the page load
-    const timer = setTimeout(() => {
-      if (!isVerified && showVerification) {
-        handleVerification();
-      }
-    }, 1000);
+  // useEffect(() => {
+  //   // Small delay to let the page load
+  //   const timer = setTimeout(() => {
+  //     if (!isVerified && showVerification) {
+  //       handleVerification();
+  //     }
+  //   }, 1000);
 
-    return () => clearTimeout(timer);
-  }, [isVerified, showVerification, handleVerification]);
+  //   return () => clearTimeout(timer);
+  // }, [isVerified, showVerification, handleVerification]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -156,8 +156,8 @@ export default function HomePage() {
             <div className="md:hidden border-t bg-white py-4 space-y-3">
               {userData && (
                 <div className="px-4 py-2 text-sm text-gray-600 border-b">
-                  Vítej, {userData.username || userData.address?.slice(0, 8) || 'Uživatel'}
-                </div>
+                  Welcome, {userData.username || userData.address?.slice(0, 8) || 'User'}
+                </div>  
               )}
               <Link
                 href="/"
@@ -270,6 +270,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 filteredEvents.map((event) => (
+                  <Link href={`/events/${event.id}`}>
                   <Card key={event.id} className="overflow-hidden hover:shadow-lg transition-shadow duration-300">
                     <div className="aspect-video bg-gradient-to-r from-purple-400 to-blue-500 relative">
                       {event.imageUrl ? (
@@ -320,6 +321,7 @@ export default function HomePage() {
                       </div>
                     </CardContent>
                   </Card>
+                  </Link>
                 ))
               )}
             </div>
