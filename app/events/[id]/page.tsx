@@ -260,8 +260,8 @@ export default function EventDetailPage() {
         to: "0x18D65F587BeCE576291FEced4feb6F2f8C47579e", 
         tokens: [
           {
-            symbol: Tokens.USDCE,
-            token_amount: tokenToDecimals(totalAmountInUSDC, Tokens.USDCE).toString(),
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(totalAmountInUSDC, Tokens.WLD).toString(),
           },
         ],
         description: `Purchase ${quantity}x tickets for ${event.title}`,
