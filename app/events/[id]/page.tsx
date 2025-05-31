@@ -172,6 +172,12 @@ export default function EventDetailPage() {
         return false
       }
 
+      console.log('Sending proof to backend for verification...')
+      console.log('Payload being sent:', {
+        payload: result.finalPayload,
+        action: 'verification',
+      })
+
       // Verify the proof on backend
       const response = await fetch('/api/verify-proof', {
         method: 'POST',
@@ -182,16 +188,23 @@ export default function EventDetailPage() {
         }),
       })
 
+      console.log('Backend response status:', response.status)
+      console.log('Backend response ok:', response.ok)
+
       const data = await response.json()
-      console.log('Backend verification response:', data)
+      console.log('Backend verification response full data:', data)
+      console.log('data.verifyRes:', data.verifyRes)
+      console.log('data.verifyRes.success:', data.verifyRes?.success)
       
-      if (data.verifyRes.success) {
-        console.log('Verification successful!')
+      if (data.verifyRes && data.verifyRes.success) {
+        console.log('Verification successful! Setting isVerified to true')
         setIsVerified(true)
         setIsVerifying(false)
+        console.log('isVerified should now be true')
         return true
       } else {
         console.error('Verification failed:', data)
+        console.error('verifyRes.success is:', data.verifyRes?.success)
         alert('Verification failed. Please try again.')
         setIsVerifying(false)
         return false
@@ -280,6 +293,8 @@ export default function EventDetailPage() {
       </div>
     )
   }
+
+  console.log('Rendering with isVerified:', isVerified, 'isVerifying:', isVerifying, 'isProcessingPayment:', isProcessingPayment)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50">
