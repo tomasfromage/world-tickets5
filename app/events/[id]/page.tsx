@@ -82,6 +82,15 @@ export default function EventDetailPage() {
           
           if (payment.success) {
             console.log('Payment confirmed! Updating ticket store...')
+            
+            // Zobrazíme informace o NFT tickets, pokud byly vytvořené
+            if (payment.nftTickets && payment.nftTickets.length > 0) {
+              console.log('NFT tickets created:', payment.nftTickets)
+              // Zde byste mohli uložit NFT ticket informace do store nebo zobrazit je uživateli
+            } else if (payment.warning) {
+              console.warn('Payment successful but NFT creation had issues:', payment.warning)
+            }
+            
             // Successful payment - update store
             const success = purchaseTickets(event!.id, quantity)
             if (success) {

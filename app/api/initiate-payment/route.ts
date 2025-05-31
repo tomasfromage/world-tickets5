@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { storePaymentReference } from '../confirm-payment/route'
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,8 +8,12 @@ export async function POST(req: NextRequest) {
     // Generate unique reference ID
     const reference = crypto.randomUUID().replace(/-/g, '')
     
-    // TODO: Store reference ID in database along with payment information
-    // For now just return reference ID
+    // Store payment details for later use in confirm-payment
+    storePaymentReference(reference, {
+      eventId,
+      quantity,
+      totalAmount
+    })
     
     console.log('Initiated payment:', { reference, eventId, quantity, totalAmount })
     
