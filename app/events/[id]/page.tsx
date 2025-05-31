@@ -197,14 +197,14 @@ export default function EventDetailPage() {
         body: JSON.stringify({
           eventId: event.id,
           quantity: quantity,
-          totalAmount: totalPrice * 1.1 // including service fee
+          totalAmount: totalPrice * 1.03 // including service fee
         })
       })
 
       const { id } = await res.json()
 
       // Convert price to USDC (assuming price is in USD)
-      const totalAmountInUSDC = totalPrice * 1.1
+      const totalAmountInUSDC = totalPrice * 1.03
 
       const payload: PayCommandInput = {
         reference: id,
