@@ -12,27 +12,90 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Calendar, MapPin, Ticket, Users, CreditCard, CheckCircle } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
+import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload } from '@worldcoin/minikit-js'
+
+// Define Event type based on the store interface
+interface Event {
+  id: string
+  title: string
+  description: string
+  category: string
+  date: string
+  time: string
+  venue: string
+  price: number
+  totalTickets: number
+  availableTickets: number
+  createdAt: string
+  createdBy?: string
+  imageUrl?: string
+}
 
 export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { events, purchaseTickets } = useTicketStore()
-  const [event, setEvent] = useState(null)
+  const [event, setEvent] = useState<Event | undefined>(undefined)
   const [quantity, setQuantity] = useState(1)
-  const [showPurchaseForm, setShowPurchaseForm] = useState(false)
   const [purchaseComplete, setPurchaseComplete] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-  })
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
 
   useEffect(() => {
     const foundEvent = events.find((e) => e.id === params.id)
     setEvent(foundEvent)
   }, [events, params.id])
+
+  // Setup MiniKit event listener
+  useEffect(() => {
+    if (!MiniKit.isInstalled()) {
+      console.warn("MiniKit is not installed")
+      return
+    }
+
+    const handlePaymentResponse = async (response: MiniAppPaymentPayload) => {
+      console.log('MiniKit payment response:', response)
+      
+      if (response.status === "success") {
+        try {
+          const res = await fetch('/api/confirm-payment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response),
+          })
+          
+          const payment = await res.json()
+          
+          if (payment.success) {
+            // Successful payment - update store
+            const success = purchaseTickets(event!.id, quantity)
+            if (success) {
+              setPurchaseComplete(true)
+              setTimeout(() => {
+                router.push("/dashboard")
+              }, 3000)
+            }
+          } else {
+            console.error('Payment not confirmed:', payment)
+            alert('Payment failed. Please try again.')
+          }
+        } catch (error) {
+          console.error('Error confirming payment:', error)
+          alert('An error occurred while processing payment.')
+        }
+      } else {
+        console.log('Payment was cancelled or failed')
+        alert('Payment was cancelled.')
+      }
+      
+      setIsProcessingPayment(false)
+    }
+
+    MiniKit.subscribe(ResponseEvent.MiniAppPayment, handlePaymentResponse)
+
+    return () => {
+      MiniKit.unsubscribe(ResponseEvent.MiniAppPayment)
+    }
+  }, [events, params.id, quantity, purchaseTickets, router, event])
 
   if (!event) {
     return (
@@ -64,15 +127,52 @@ export default function EventDetailPage() {
     })
   }
 
-  const handlePurchase = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleMiniKitPayment = async () => {
+    if (!MiniKit.isInstalled()) {
+      alert('World App is not installed. World App is required for payment.')
+      return
+    }
 
-    const success = purchaseTickets(event.id, quantity)
-    if (success) {
-      setPurchaseComplete(true)
-      setTimeout(() => {
-        router.push("/dashboard")
-      }, 3000)
+    setIsProcessingPayment(true)
+
+    try {
+      // Iniciate payment on backend
+      const res = await fetch('/api/initiate-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          eventId: event.id,
+          quantity: quantity,
+          totalAmount: totalPrice * 1.1 // including service fee
+        })
+      })
+
+      const { id } = await res.json()
+
+      // Convert price to USDC (assuming price is in USD)
+      const totalAmountInUSDC = totalPrice * 1.1
+
+      const payload: PayCommandInput = {
+        reference: id,
+        to: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045", // Test address - replace with actual address
+        tokens: [
+          {
+            symbol: Tokens.USDCE,
+            token_amount: tokenToDecimals(totalAmountInUSDC, Tokens.USDCE).toString(),
+          },
+        ],
+        description: `Purchase ${quantity}x tickets for ${event.title}`,
+      }
+
+      console.log('Iniciating MiniKit payment:', payload)
+      
+      // Send payment command
+      MiniKit.commands.pay(payload)
+      
+    } catch (error) {
+      console.error('Error initiating payment:', error)
+      alert('An error occurred while initiating payment.')
+      setIsProcessingPayment(false)
     }
   }
 
@@ -189,137 +289,59 @@ export default function EventDetailPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {!showPurchaseForm ? (
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="quantity" className="text-sm sm:text-base">
-                        Number of Tickets
-                      </Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        min="1"
-                        max={event.availableTickets}
-                        value={quantity}
-                        onChange={(e) => setQuantity(Number.parseInt(e.target.value) || 1)}
-                        className="mt-1 text-sm sm:text-base"
-                      />
-                    </div>
-
-                    <Separator />
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm sm:text-base">
-                        <span>Tickets ({quantity}x)</span>
-                        <span>${(event.price * quantity).toFixed(2)}</span>
-                      </div>
-                      <div className="flex justify-between text-sm sm:text-base">
-                        <span>Service Fee</span>
-                        <span>${(totalPrice * 0.1).toFixed(2)}</span>
-                      </div>
-                      <Separator />
-                      <div className="flex justify-between font-bold text-base sm:text-lg">
-                        <span>Total</span>
-                        <span>${(totalPrice * 1.1).toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={() => setShowPurchaseForm(true)}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
-                      disabled={event.availableTickets === 0}
-                    >
-                      {event.availableTickets === 0 ? "Sold Out" : "Continue to Payment"}
-                    </Button>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="quantity" className="text-sm sm:text-base">
+                      Number of Tickets
+                    </Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      max={event.availableTickets}
+                      value={quantity}
+                      onChange={(e) => setQuantity(Number.parseInt(e.target.value) || 1)}
+                      className="mt-1 text-sm sm:text-base"
+                    />
                   </div>
-                ) : (
-                  <form onSubmit={handlePurchase} className="space-y-4">
-                    <div>
-                      <Label htmlFor="name" className="text-sm sm:text-base">
-                        Full Name
-                      </Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                        className="text-sm sm:text-base"
-                        required
-                      />
-                    </div>
 
-                    <div>
-                      <Label htmlFor="email" className="text-sm sm:text-base">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
-                        className="text-sm sm:text-base"
-                        required
-                      />
-                    </div>
+                  <Separator />
 
-                    <div>
-                      <Label htmlFor="cardNumber" className="text-sm sm:text-base">
-                        Card Number
-                      </Label>
-                      <Input
-                        id="cardNumber"
-                        placeholder="1234 5678 9012 3456"
-                        value={formData.cardNumber}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, cardNumber: e.target.value }))}
-                        className="text-sm sm:text-base"
-                        required
-                      />
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm sm:text-base">
+                      <span>Tickets ({quantity}x)</span>
+                      <span>${(event.price * quantity).toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between text-sm sm:text-base">
+                      <span>Service Fee</span>
+                      <span>${(totalPrice * 0.1).toFixed(2)}</span>
+                    </div>
+                    <Separator />
+                    <div className="flex justify-between font-bold text-base sm:text-lg">
+                      <span>Total</span>
+                      <span>${(totalPrice * 1.1).toFixed(2)}</span>
+                    </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="expiryDate" className="text-sm sm:text-base">
-                          Expiry
-                        </Label>
-                        <Input
-                          id="expiryDate"
-                          placeholder="MM/YY"
-                          value={formData.expiryDate}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, expiryDate: e.target.value }))}
-                          className="text-sm sm:text-base"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="cvv" className="text-sm sm:text-base">
-                          CVV
-                        </Label>
-                        <Input
-                          id="cvv"
-                          placeholder="123"
-                          value={formData.cvv}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, cvv: e.target.value }))}
-                          className="text-sm sm:text-base"
-                          required
-                        />
-                      </div>
-                    </div>
+                  <Button
+                    onClick={handleMiniKitPayment}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
+                    disabled={event.availableTickets === 0 || isProcessingPayment}
+                  >
+                    {event.availableTickets === 0 
+                      ? "Sold Out" 
+                      : isProcessingPayment 
+                        ? "Processing Payment..." 
+                        : "Pay with World App"
+                    }
+                  </Button>
 
-                    <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setShowPurchaseForm(false)}
-                        className="flex-1 text-sm sm:text-base"
-                      >
-                        Back
-                      </Button>
-                      <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700 text-sm sm:text-base">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Pay ${(totalPrice * 1.1).toFixed(2)}
-                      </Button>
-                    </div>
-                  </form>
-                )}
+                  {!MiniKit.isInstalled() && (
+                    <p className="text-xs text-gray-500 text-center">
+                      World App is required for payment
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
