@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Calendar, MapPin, Ticket, Users, CreditCard, CheckCircle } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
-import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload, VerificationLevel, type MiniAppVerifyActionPayload } from '@worldcoin/minikit-js'
+import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload, VerificationLevel } from '@worldcoin/minikit-js'
 
 // Define Event type based on the store interface
 interface Event {
@@ -110,26 +110,11 @@ export default function EventDetailPage() {
       }
     }
 
-    const handleVerificationResponse = async (response: MiniAppVerifyActionPayload) => {
-      console.log('MiniKit verification response received:', response)
-      
-      if (response.status === "error") {
-        console.log('Verification was cancelled or failed:', response)
-        // Reset verification states
-        setIsVerifying(false)
-        setIsVerified(false)
-        // Don't show alert for cancellation - user choice
-      }
-      // Success case is handled by the async verify command in handleVerification
-    }
-
     MiniKit.subscribe(ResponseEvent.MiniAppPayment, handlePaymentResponse)
-    MiniKit.subscribe(ResponseEvent.MiniAppVerifyAction, handleVerificationResponse)
 
     return () => {
       console.log('Unsubscribing from MiniKit events')
       MiniKit.unsubscribe(ResponseEvent.MiniAppPayment)
-      MiniKit.unsubscribe(ResponseEvent.MiniAppVerifyAction)
     }
   }, [events, params.id, quantity, purchaseTickets, router, event])
 
@@ -169,6 +154,7 @@ export default function EventDetailPage() {
       return false
     }
 
+    console.log('Starting verification process...')
     setIsVerifying(true)
 
     try {
@@ -176,6 +162,15 @@ export default function EventDetailPage() {
         action: 'verification',
         verification_level: VerificationLevel.Device,
       })
+
+      console.log('Verification result received:', result)
+
+      // Check if verification was cancelled or failed in the async response
+      if (result.finalPayload.status === 'error') {
+        console.log('Verification was cancelled or failed')
+        setIsVerifying(false)
+        return false
+      }
 
       // Verify the proof on backend
       const response = await fetch('/api/verify-proof', {
@@ -188,12 +183,15 @@ export default function EventDetailPage() {
       })
 
       const data = await response.json()
+      console.log('Backend verification response:', data)
       
       if (data.verifyRes.success) {
+        console.log('Verification successful! Proceeding with payment...')
         setIsVerified(true)
         setIsVerifying(false)
         
-        // After successful verification, immediately proceed with payment
+        // Immediately proceed with payment after successful verification
+        console.log('Calling proceedWithPayment...')
         await proceedWithPayment()
         
         return true
