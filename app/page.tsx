@@ -118,7 +118,7 @@ export default function HomePage() {
             {/* User info */}
             {userData && (
               <div className="hidden md:flex items-center space-x-2 text-sm text-gray-600">
-                <span>Vítej, {userData.username || userData.address?.slice(0, 8) || 'Uživatel'}</span>
+                <span>Vítej, {userData.username || userData.address?.slice(0, 8) || 'User'}</span>
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
               </div>
             )}
@@ -126,7 +126,7 @@ export default function HomePage() {
             {/* Desktop Navigation */}
             <nav className="hidden md:flex space-x-8">
               <Link href="/" className="text-gray-900 hover:text-purple-600 font-medium">
-                Eventy
+                Events
               </Link>
               <Link href="/marketplace" className="text-gray-600 hover:text-purple-600">
                 Marketplace
@@ -197,10 +197,10 @@ export default function HomePage() {
       <section className="py-12 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-gray-900 mb-4 sm:mb-6">
-            Objevte Úžasné Eventy
+            Discover Amazing Events
           </h1>
           <p className="text-lg sm:text-xl text-gray-600 mb-6 sm:mb-8 px-4">
-            Najděte, kupte a prodávejte lístky na koncerty, sport, divadlo a mnoho dalšího
+            Find, buy, and sell tickets for concerts, sports, theater, and much more
           </p>
 
           {/* Mobile-Optimized Search Bar */}
@@ -208,7 +208,7 @@ export default function HomePage() {
             <Search className="absolute left-6 sm:left-7 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 sm:h-5 sm:w-5" />
             <Input
               type="text"
-              placeholder="Hledat eventy..."
+              placeholder="Search events..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10 sm:pl-12 pr-4 py-3 sm:py-4 text-base sm:text-lg border-2 border-gray-200 focus:border-purple-500 rounded-xl"
@@ -223,7 +223,7 @@ export default function HomePage() {
           <div className="max-w-7xl mx-auto">
             <Alert className="border-red-200 bg-red-50">
               <AlertDescription className="text-red-800">
-                Chyba při načítání eventů: {error}
+                Error loading events: {error}
               </AlertDescription>
             </Alert>
           </div>
@@ -247,7 +247,7 @@ export default function HomePage() {
           {isLoading && (
             <div className="flex justify-center items-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-purple-600" />
-              <span className="ml-2 text-gray-600">Načítání eventů...</span>
+              <span className="ml-2 text-gray-600">Loading events...</span>
             </div>
           )}
 
@@ -263,7 +263,7 @@ export default function HomePage() {
                     <Link href="/events/create" className="mt-4 inline-block">
                       <Button className="bg-purple-600 hover:bg-purple-700">
                         <Plus className="h-4 w-4 mr-2" />
-                        Vytvořit první event
+                        Create first event
                       </Button>
                     </Link>
                   )}
