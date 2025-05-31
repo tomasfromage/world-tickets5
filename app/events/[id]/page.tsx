@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowLeft, Calendar, MapPin, Ticket, Users, CreditCard, CheckCircle } from "lucide-react"
 import { useTicketStore } from "@/lib/store"
-import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload, VerificationLevel } from '@worldcoin/minikit-js'
+import { MiniKit, tokenToDecimals, Tokens, PayCommandInput, ResponseEvent, type MiniAppPaymentPayload, VerificationLevel, type MiniAppVerifyActionPayload } from '@worldcoin/minikit-js'
 
 // Define Event type based on the store interface
 interface Event {
@@ -54,10 +54,13 @@ export default function EventDetailPage() {
       return
     }
 
+    console.log('Setting up MiniKit payment event listener...')
+
     const handlePaymentResponse = async (response: MiniAppPaymentPayload) => {
-      console.log('MiniKit payment response:', response)
+      console.log('MiniKit payment response received:', response)
       
       if (response.status === "success") {
+        console.log('Payment was successful, confirming on backend...')
         try {
           const res = await fetch('/api/confirm-payment', {
             method: 'POST',
@@ -66,11 +69,14 @@ export default function EventDetailPage() {
           })
           
           const payment = await res.json()
+          console.log('Payment confirmation response:', payment)
           
           if (payment.success) {
+            console.log('Payment confirmed! Updating ticket store...')
             // Successful payment - update store
             const success = purchaseTickets(event!.id, quantity)
             if (success) {
+              console.log('Tickets purchased successfully! Redirecting...')
               setPurchaseComplete(true)
               setTimeout(() => {
                 router.push("/dashboard")
@@ -79,23 +85,51 @@ export default function EventDetailPage() {
           } else {
             console.error('Payment not confirmed:', payment)
             alert('Payment failed. Please try again.')
+            // Reset states on payment failure
+            setIsProcessingPayment(false)
           }
         } catch (error) {
           console.error('Error confirming payment:', error)
           alert('An error occurred while processing payment.')
+          // Reset states on error
+          setIsProcessingPayment(false)
         }
       } else {
-        console.log('Payment was cancelled or failed')
-        alert('Payment was cancelled.')
+        // Handle all non-success cases (cancelled, error, etc.)
+        console.log('Payment was not successful:', response)
+        
+        if (response.status === "error") {
+          alert('Payment error occurred. Please try again.')
+        }
+        // For cancelled status, we don't show alert (user intentionally cancelled)
+        
+        // Reset all processing states
+        setIsProcessingPayment(false)
+        setIsVerifying(false)
+        // Keep isVerified status - user is still verified for future attempts
       }
+    }
+
+    const handleVerificationResponse = async (response: MiniAppVerifyActionPayload) => {
+      console.log('MiniKit verification response received:', response)
       
-      setIsProcessingPayment(false)
+      if (response.status === "error") {
+        console.log('Verification was cancelled or failed:', response)
+        // Reset verification states
+        setIsVerifying(false)
+        setIsVerified(false)
+        // Don't show alert for cancellation - user choice
+      }
+      // Success case is handled by the async verify command in handleVerification
     }
 
     MiniKit.subscribe(ResponseEvent.MiniAppPayment, handlePaymentResponse)
+    MiniKit.subscribe(ResponseEvent.MiniAppVerifyAction, handleVerificationResponse)
 
     return () => {
+      console.log('Unsubscribing from MiniKit events')
       MiniKit.unsubscribe(ResponseEvent.MiniAppPayment)
+      MiniKit.unsubscribe(ResponseEvent.MiniAppVerifyAction)
     }
   }, [events, params.id, quantity, purchaseTickets, router, event])
 
@@ -415,7 +449,10 @@ export default function EventDetailPage() {
 
                   {(isVerifying || isProcessingPayment) && (
                     <p className="text-xs text-blue-600 text-center">
-                      {isVerifying ? "Please complete verification in World App" : "Please confirm payment in World App"}
+                      {isVerifying 
+                        ? "Please complete verification in World App" 
+                        : "Please confirm payment in World App (you can cancel anytime)"
+                      }
                     </p>
                   )}
                 </div>
