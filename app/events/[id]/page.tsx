@@ -186,14 +186,9 @@ export default function EventDetailPage() {
       console.log('Backend verification response:', data)
       
       if (data.verifyRes.success) {
-        console.log('Verification successful! Proceeding with payment...')
+        console.log('Verification successful!')
         setIsVerified(true)
         setIsVerifying(false)
-        
-        // Immediately proceed with payment after successful verification
-        console.log('Calling proceedWithPayment...')
-        await proceedWithPayment()
-        
         return true
       } else {
         console.error('Verification failed:', data)
@@ -259,13 +254,12 @@ export default function EventDetailPage() {
       return
     }
 
-    // If already verified, proceed directly with payment
-    if (isVerified) {
-      await proceedWithPayment()
-    } else {
-      // Start verification process which will automatically proceed with payment
-      await handleVerification()
+    if (!isVerified) {
+      alert('Please verify your identity first.')
+      return
     }
+
+    await proceedWithPayment()
   }
 
   const totalPrice = event.price * quantity
@@ -415,22 +409,33 @@ export default function EventDetailPage() {
                     </div>
                   </div>
 
-                  <Button
-                    onClick={handleMiniKitPayment}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
-                    disabled={event.availableTickets === 0 || isProcessingPayment || isVerifying}
-                  >
-                    {event.availableTickets === 0 
-                      ? "Sold Out" 
-                      : isVerifying
-                        ? "Verifying Identity..."
+                  {!isVerified ? (
+                    <Button
+                      onClick={handleVerification}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-sm sm:text-base"
+                      disabled={event.availableTickets === 0 || isVerifying}
+                    >
+                      {event.availableTickets === 0 
+                        ? "Sold Out" 
+                        : isVerifying
+                          ? "Verifying Identity..."
+                          : "Verify with World ID"
+                      }
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={handleMiniKitPayment}
+                      className="w-full bg-green-600 hover:bg-green-700 text-sm sm:text-base"
+                      disabled={event.availableTickets === 0 || isProcessingPayment}
+                    >
+                      {event.availableTickets === 0 
+                        ? "Sold Out" 
                         : isProcessingPayment 
                           ? "Processing Payment..." 
-                          : isVerified
-                            ? "Pay with World App"
-                            : "Verify & Pay"
-                    }
-                  </Button>
+                          : "Pay with World App"
+                      }
+                    </Button>
+                  )}
 
                   {!MiniKit.isInstalled() && (
                     <p className="text-xs text-gray-500 text-center">
@@ -438,19 +443,22 @@ export default function EventDetailPage() {
                     </p>
                   )}
 
-                  {isVerified && !isProcessingPayment && !isVerifying && (
-                    <p className="text-xs text-green-600 text-center flex items-center justify-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Identity verified - click to pay
+                  {!isVerified && isVerifying && (
+                    <p className="text-xs text-blue-600 text-center">
+                      Please complete verification in World App
                     </p>
                   )}
 
-                  {(isVerifying || isProcessingPayment) && (
+                  {isVerified && !isProcessingPayment && (
+                    <p className="text-xs text-green-600 text-center flex items-center justify-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Identity verified - ready to pay
+                    </p>
+                  )}
+
+                  {isProcessingPayment && (
                     <p className="text-xs text-blue-600 text-center">
-                      {isVerifying 
-                        ? "Please complete verification in World App" 
-                        : "Please confirm payment in World App (you can cancel anytime)"
-                      }
+                      Please confirm payment in World App (you can cancel anytime)
                     </p>
                   )}
                 </div>
