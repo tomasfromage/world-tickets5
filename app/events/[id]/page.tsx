@@ -40,12 +40,21 @@ export default function EventDetailPage() {
   const [purchaseComplete, setPurchaseComplete] = useState(false)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [isVerifying, setIsVerifying] = useState(false)
-  const [isVerified, setIsVerified] = useState(false)
+  const [isVerified, setIsVerified] = useState(true)
 
   useEffect(() => {
     const foundEvent = events.find((e) => e.id === params.id)
     setEvent(foundEvent)
   }, [events, params.id])
+
+  // Debug useEffect to track state changes
+  useEffect(() => {
+    console.log('State changed - isVerified:', isVerified, 'isVerifying:', isVerifying)
+  }, [isVerified, isVerifying])
+
+  useEffect(() => {
+    console.log('Event changed:', event?.id, event?.title)
+  }, [event])
 
   // Setup MiniKit event listener
   useEffect(() => {
