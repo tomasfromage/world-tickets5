@@ -158,6 +158,10 @@ export default function EventDetailPage() {
       if (data.verifyRes.success) {
         setIsVerified(true)
         setIsVerifying(false)
+        
+        // After successful verification, immediately proceed with payment
+        await proceedWithPayment()
+        
         return true
       } else {
         console.error('Verification failed:', data)
@@ -173,20 +177,7 @@ export default function EventDetailPage() {
     }
   }
 
-  const handleMiniKitPayment = async () => {
-    if (!MiniKit.isInstalled()) {
-      alert('World App is not installed. World App is required for payment.')
-      return
-    }
-
-    // First verify if not already verified
-    if (!isVerified) {
-      const verificationSuccess = await handleVerification()
-      if (!verificationSuccess) {
-        return // Stop if verification failed
-      }
-    }
-
+  const proceedWithPayment = async () => {
     setIsProcessingPayment(true)
 
     try {
@@ -230,6 +221,21 @@ export default function EventDetailPage() {
     }
   }
 
+  const handleMiniKitPayment = async () => {
+    if (!MiniKit.isInstalled()) {
+      alert('World App is not installed. World App is required for payment.')
+      return
+    }
+
+    // If already verified, proceed directly with payment
+    if (isVerified) {
+      await proceedWithPayment()
+    } else {
+      // Start verification process which will automatically proceed with payment
+      await handleVerification()
+    }
+  }
+
   const totalPrice = event.price * quantity
 
   if (purchaseComplete) {
@@ -265,7 +271,7 @@ export default function EventDetailPage() {
               </Link>
               <div className="flex items-center space-x-2">
                 <Ticket className="h-6 w-6 sm:h-8 sm:w-8 text-purple-600" />
-                <span className="text-lg sm:text-2xl font-bold text-gray-900">TicketHub</span>
+                <span className="text-lg sm:text-2xl font-bold text-gray-900">Tickets</span>
               </div>
             </div>
           </div>
@@ -390,7 +396,7 @@ export default function EventDetailPage() {
                           ? "Processing Payment..." 
                           : isVerified
                             ? "Pay with World App"
-                            : "Verify & Pay with World App"
+                            : "Verify & Pay"
                     }
                   </Button>
 
@@ -400,10 +406,16 @@ export default function EventDetailPage() {
                     </p>
                   )}
 
-                  {isVerified && !isProcessingPayment && (
+                  {isVerified && !isProcessingPayment && !isVerifying && (
                     <p className="text-xs text-green-600 text-center flex items-center justify-center gap-1">
                       <CheckCircle className="h-3 w-3" />
-                      Identity verified - ready to pay
+                      Identity verified - click to pay
+                    </p>
+                  )}
+
+                  {(isVerifying || isProcessingPayment) && (
+                    <p className="text-xs text-blue-600 text-center">
+                      {isVerifying ? "Please complete verification in World App" : "Please confirm payment in World App"}
                     </p>
                   )}
                 </div>
