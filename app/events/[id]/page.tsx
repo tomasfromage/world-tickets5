@@ -81,34 +81,42 @@ export default function EventDetailPage() {
           console.log('Payment confirmation response:', payment)
           
           if (payment.success) {
-            console.log('Payment confirmed! Updating ticket store...')
+            console.log('✅ Payment confirmed! Processing NFT creation...')
             
             // Zobrazíme informace o NFT tickets, pokud byly vytvořené
             if (payment.nftTickets && payment.nftTickets.length > 0) {
-              console.log('NFT tickets created:', payment.nftTickets)
-              // Zde byste mohli uložit NFT ticket informace do store nebo zobrazit je uživateli
+              console.log('🎫 NFT tickets created successfully!', payment.nftTickets)
+              console.log(`📦 Created ${payment.nftTickets.length} NFT ticket(s) for buyer: ${payment.buyerAddress}`)
+              
+              // Můžeme přidat notifikaci o úspěšném vytvoření NFT
+              alert(`🎉 Payment successful! ${payment.nftTickets.length} NFT ticket(s) have been created and sent to your wallet.`)
+              
             } else if (payment.warning) {
-              console.warn('Payment successful but NFT creation had issues:', payment.warning)
+              console.warn('⚠️ Payment successful but NFT creation had issues:', payment.warning)
+              alert(`✅ Payment successful! However, there was an issue creating your NFT tickets: ${payment.nftError || payment.warning}`)
+            } else {
+              console.log('✅ Payment successful, NFT creation in progress...')
+              alert('🎉 Payment successful! Your NFT tickets are being created.')
             }
             
             // Successful payment - update store
             const success = purchaseTickets(event!.id, quantity)
             if (success) {
-              console.log('Tickets purchased successfully! Redirecting...')
+              console.log('📊 Tickets added to store successfully! Redirecting...')
               setPurchaseComplete(true)
               setTimeout(() => {
                 router.push("/dashboard")
               }, 3000)
             }
           } else {
-            console.error('Payment not confirmed:', payment)
-            alert('Payment failed. Please try again.')
+            console.error('❌ Payment not confirmed:', payment)
+            alert('❌ Payment failed. Please try again.')
             // Reset states on payment failure
             setIsProcessingPayment(false)
           }
         } catch (error) {
-          console.error('Error confirming payment:', error)
-          alert('An error occurred while processing payment.')
+          console.error('💥 Error confirming payment:', error)
+          alert('💥 An error occurred while processing payment.')
           // Reset states on error
           setIsProcessingPayment(false)
         }
@@ -117,7 +125,7 @@ export default function EventDetailPage() {
         console.log('Payment was not successful:', response)
         
         if (response.status === "error") {
-          alert('Payment error occurred. Please try again.')
+          alert('❌ Payment error occurred. Please try again.')
         }
         // For cancelled status, we don't show alert (user intentionally cancelled)
         
@@ -239,6 +247,7 @@ export default function EventDetailPage() {
     setIsProcessingPayment(true)
 
     try {
+      
       // Iniciate payment on backend
       const res = await fetch('/api/initiate-payment', {
         method: 'POST',
@@ -260,8 +269,8 @@ export default function EventDetailPage() {
         to: "0x18D65F587BeCE576291FEced4feb6F2f8C47579e", 
         tokens: [
           {
-            symbol: Tokens.WLD,
-            token_amount: tokenToDecimals(totalAmountInUSDC, Tokens.WLD).toString(),
+            symbol: Tokens.USDCE,
+            token_amount: tokenToDecimals(totalAmountInUSDC, Tokens.USDCE).toString(),
           },
         ],
         description: `Purchase ${quantity}x tickets for ${event.title}`,
@@ -271,6 +280,7 @@ export default function EventDetailPage() {
       
       // Send payment command
       MiniKit.commands.pay(payload)
+
       
     } catch (error) {
       console.error('Error initiating payment:', error)
@@ -305,6 +315,13 @@ export default function EventDetailPage() {
             <p className="text-sm sm:text-base text-gray-600 mb-4">
               You've successfully purchased {quantity} ticket{quantity > 1 ? "s" : ""} for {event.title}.
             </p>
+            <div className="bg-purple-50 p-4 rounded-lg mb-4">
+              <h3 className="font-semibold text-purple-900 mb-2">🎫 NFT Tickets Created</h3>
+              <p className="text-sm text-purple-700">
+                Your ticket{quantity > 1 ? "s" : ""} have been minted as NFT{quantity > 1 ? "s" : ""} on Worldchain blockchain.
+                Check your World App wallet for your new digital ticket{quantity > 1 ? "s" : ""}!
+              </p>
+            </div>
             <p className="text-xs sm:text-sm text-gray-500">Redirecting to your dashboard...</p>
           </CardContent>
         </Card>

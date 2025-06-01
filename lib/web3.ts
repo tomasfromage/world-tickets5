@@ -67,15 +67,52 @@ export const publicClient = createPublicClient({
   transport: http(process.env.WORLDCHAIN_RPC_URL || 'https://worldchain-mainnet.g.alchemy.com/public')
 })
 
+// Pomocná funkce pro validaci a normalizaci private key
+function validateAndNormalizePrivateKey(privateKey: string): `0x${string}` {
+  if (!privateKey) {
+    throw new Error('Private key is required')
+  }
+  
+  // Odstraníme whitespace
+  let cleanKey = privateKey.trim()
+  
+  // Přidáme 0x prefix pokud chybí
+  if (!cleanKey.startsWith('0x')) {
+    cleanKey = '0x' + cleanKey
+  }
+  
+  // Zkontrolujeme délku (0x + 64 hex characters = 66 total)
+  if (cleanKey.length !== 66) {
+    throw new Error(`Invalid private key length: expected 66 characters (including 0x), got ${cleanKey.length}`)
+  }
+  
+  // Zkontrolujeme, zda obsahuje pouze validní hex characters
+  const hexRegex = /^0x[0-9a-fA-F]{64}$/
+  if (!hexRegex.test(cleanKey)) {
+    throw new Error('Private key must contain only valid hexadecimal characters')
+  }
+  
+  return cleanKey as `0x${string}`
+}
+
 // Wallet client pro transakce (potřebuje private key)
 export function createWalletClientFromKey(privateKey: string) {
-  const account = privateKeyToAccount(privateKey as `0x${string}`)
-  
-  return createWalletClient({
-    account,
-    chain: worldchain,
-    transport: http(process.env.WORLDCHAIN_RPC_URL || 'https://worldchain-mainnet.g.alchemy.com/public')
-  })
+  try {
+    // Validace a normalizace private key
+    const normalizedKey = validateAndNormalizePrivateKey(privateKey)
+    
+    // Vytvoření účtu z private key
+    const account = privateKeyToAccount(normalizedKey)
+    
+    return createWalletClient({
+      account,
+      chain: worldchain,
+      transport: http(process.env.WORLDCHAIN_RPC_URL || 'https://worldchain-mainnet.g.alchemy.com/public')
+    })
+  } catch (error) {
+    console.error('Error creating wallet client:', error)
+    throw new Error(`Failed to create wallet client: ${error instanceof Error ? error.message : 'Unknown error'}`)
+  }
 }
 
 // Contract address - bude potřeba nastavit po deploymentu

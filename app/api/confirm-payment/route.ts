@@ -50,55 +50,75 @@ export async function POST(req: NextRequest) {
     
     // For testing - always accept payment
     if (payload.status === 'success') {
-      console.log('Payment confirmed successfully for reference:', reference)
+      console.log('✅ Payment confirmed successfully for reference:', reference)
       
       try {
         // Získáme detaily platby z reference (v produkci z databáze)
         const paymentDetails = paymentReferences.get(reference)
         if (!paymentDetails) {
-          console.warn('Payment details not found for reference:', reference)
+          console.warn('⚠️ Payment details not found for reference:', reference)
           // Pro testování pokračujeme s default hodnotami
         }
         
-        // Zavoláme mint NFT endpoint po úspěšné platbě
-        console.log('Calling mint NFT endpoint after successful payment...')
+        // Získáme buyer address z payload
+        let buyerAddress = payload.transaction?.from || 
+                          payload.from || 
+                          payload.user_address ||
+                          '0x0000000000000000000000000000000000000000'
+        
+        console.log('💳 Payment payload details:', {
+          reference,
+          transactionId: payload.transaction_id,
+          buyerAddress,
+          paymentDetails: paymentDetails || 'not found'
+        })
+        
+        // 🎫 Zavoláme mint NFT endpoint po úspěšné platbě
+        console.log('🚀 Calling mint NFT endpoint after successful payment...')
+        
+        const mintPayload = {
+          eventId: paymentDetails?.eventId || '1', // fallback pro testování
+          quantity: paymentDetails?.quantity || 1,
+          buyerAddress: buyerAddress,
+          totalAmountUSD: paymentDetails?.totalAmount || 10,
+          paymentReference: reference
+        }
+        
+        console.log('📦 Mint payload:', mintPayload)
         
         const mintResponse = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/mint-nft-ticket`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            eventId: paymentDetails?.eventId || '1', // fallback pro testování
-            quantity: paymentDetails?.quantity || 1,
-            buyerAddress: payload.transaction?.from || '0x0000000000000000000000000000000000000000', // adresa z transakce
-            totalAmountUSD: paymentDetails?.totalAmount || 10,
-            paymentReference: reference
-          })
+          body: JSON.stringify(mintPayload)
         })
         
         const mintResult = await mintResponse.json()
-        console.log('NFT minting result:', mintResult)
+        console.log('🎫 NFT minting result:', mintResult)
         
         if (mintResult.success) {
-          console.log('NFT tickets minted successfully:', mintResult.ticketIds)
+          console.log('✅ NFT tickets minted successfully:', mintResult.ticketIds)
           return NextResponse.json({ 
             success: true,
             nftTickets: mintResult.ticketIds,
-            message: 'Payment confirmed and NFT tickets minted successfully'
+            message: 'Payment confirmed and NFT tickets minted successfully',
+            paymentReference: reference,
+            buyerAddress: buyerAddress
           })
         } else {
-          console.error('Failed to mint NFT tickets:', mintResult.error)
+          console.error('❌ Failed to mint NFT tickets:', mintResult.error)
           // I když NFT minting selže, platba byla úspěšná
           return NextResponse.json({ 
             success: true,
             warning: 'Payment confirmed but NFT minting failed',
-            nftError: mintResult.error
+            nftError: mintResult.error,
+            details: mintResult.details
           })
         }
         
       } catch (nftError) {
-        console.error('Error during NFT minting:', nftError)
+        console.error('💥 Error during NFT minting:', nftError)
         // I když NFT minting selže, platba byla úspěšná
         return NextResponse.json({ 
           success: true,
@@ -108,10 +128,11 @@ export async function POST(req: NextRequest) {
       }
     }
     
+    console.log('❌ Payment status was not success:', payload.status)
     return NextResponse.json({ success: false })
     
   } catch (error) {
-    console.error('Error confirming payment:', error)
+    console.error('💥 Error confirming payment:', error)
     return NextResponse.json(
       { error: 'Failed to confirm payment' },
       { status: 500 }
@@ -125,5 +146,6 @@ export function storePaymentReference(reference: string, details: {
   quantity: number
   totalAmount: number
 }) {
+  console.log('💾 Storing payment reference:', reference, details)
   paymentReferences.set(reference, details)
 } 

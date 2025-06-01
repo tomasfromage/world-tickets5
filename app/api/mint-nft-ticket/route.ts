@@ -17,6 +17,13 @@ export async function POST(req: NextRequest) {
     
     // Zkontrolujeme, zda máme všechny potřebné environment proměnné
     const privateKey = process.env.NFT_MINTER_PRIVATE_KEY
+    console.log('Private key status:', {
+      exists: !!privateKey,
+      length: privateKey?.length,
+      prefix: privateKey?.startsWith('0x'),
+      type: typeof privateKey
+    })
+    
     if (!privateKey) {
       console.error('NFT_MINTER_PRIVATE_KEY not found in environment variables')
       return NextResponse.json({ 
@@ -33,11 +40,22 @@ export async function POST(req: NextRequest) {
       }, { status: 500 })
     }
     
-    // Vytvoříme wallet client
-    const walletClient = createWalletClientFromKey(privateKey)
+    // Vytvoříme wallet client s lepším error handlingem
+    let walletClient
+    try {
+      console.log('Creating wallet client...')
+      walletClient = createWalletClientFromKey(privateKey)
+      console.log('Wallet client created successfully')
+    } catch (walletError) {
+      console.error('Failed to create wallet client:', walletError)
+      return NextResponse.json({ 
+        success: false, 
+        error: 'Failed to create wallet client',
+        details: walletError instanceof Error ? walletError.message : 'Unknown wallet error'
+      }, { status: 500 })
+    }
     
     // Mint NFT tickets pro kupujícího
-    const mintPromises = []
     const ticketIds = []
     
     for (let i = 0; i < quantity; i++) {
@@ -49,6 +67,13 @@ export async function POST(req: NextRequest) {
         
         // Konvertujeme cenu na Wei (pro platbu kontraktu)
         const ticketPriceWei = convertUSDToWei(totalAmountUSD / quantity)
+        
+        console.log('Transaction parameters:', {
+          contractAddress: TICKET_NFT_CONTRACT_ADDRESS,
+          eventId: eventIdUint.toString(),
+          ticketPriceWei: ticketPriceWei.toString(),
+          walletAddress: walletClient.account.address
+        })
         
         // Zavoláme purchaseTicket funkci kontraktu
         const hash = await walletClient.writeContract({
